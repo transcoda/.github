@@ -4,6 +4,7 @@
 // `Radarr, Sonarr`, `SDK 1.0.1`) and starts with a capital letter or a digit.
 // Squash merges use the title as the commit message, so this also keeps main's history readable.
 // Usage: PR_TITLE="..." node check-title.mjs (run by action.yml)
+import { pathToFileURL } from 'node:url';
 
 /** Problems with `title`, as strings; [] when it follows the house style. */
 export function titleErrors(title) {
@@ -27,7 +28,7 @@ export function titleErrors(title) {
   return errors;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const title = process.env.PR_TITLE ?? '';
   const errors = titleErrors(title);
   if (errors.length > 0) {

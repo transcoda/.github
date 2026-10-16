@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { titleErrors } from './check-title.mjs';
@@ -56,4 +59,12 @@ test('the script exits 1 with annotations for a bad title and 0 for a good one',
   assert.match(bad.stderr, /::error::/);
   const good = run('CI: OpenSSF Scorecard');
   assert.equal(good.status, 0, good.stderr);
+});
+
+test('the script still checks the title when its path has spaces', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pr title '));
+  const copy = join(dir, 'check-title.mjs');
+  copyFileSync(script, copy);
+  const r = spawnSync(process.execPath, [copy], { env: { PR_TITLE: 'chore: x' }, encoding: 'utf8' });
+  assert.equal(r.status, 1, r.stdout);
 });
