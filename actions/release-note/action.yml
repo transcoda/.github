@@ -1,0 +1,25 @@
+name: Release note
+description: Checks out the pull request and runs the repository's own release-note checker with the PR's base, head, labels and author.
+inputs:
+  script:
+    description: The repository's checker, run as `node <script> <base-sha> <head-sha> <labels-json> <author-login>`.
+    default: scripts/check-release-note.mjs
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .node-version
+    - name: Check for a release note
+      shell: bash
+      env:
+        SCRIPT: ${{ inputs.script }}
+        BASE: ${{ github.event.pull_request.base.sha }}
+        HEAD: ${{ github.event.pull_request.head.sha }}
+        LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        AUTHOR: ${{ github.event.pull_request.user.login }}
+      run: node "$SCRIPT" "$BASE" "$HEAD" "$LABELS" "$AUTHOR"

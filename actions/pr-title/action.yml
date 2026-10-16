@@ -1,0 +1,10 @@
+name: PR title
+description: Fails when a pull request title doesn't follow the Transcoda house style, "<Area>: <what changed>".
+runs:
+  using: composite
+  steps:
+    - name: Check the title
+      shell: bash
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+      run: node "$GITHUB_ACTION_PATH/check-title.mjs"
