@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { titleErrors } from './check-title.mjs';
+import { titleErrors } from './title-rules.mjs';
 
 const script = fileURLToPath(new URL('./check-title.mjs', import.meta.url));
 
@@ -61,10 +61,11 @@ test('the script exits 1 with annotations for a bad title and 0 for a good one',
   assert.equal(good.status, 0, good.stderr);
 });
 
-test('the script still checks the title when its path has spaces', () => {
+test('the script checks the title from a path with spaces or a symlink', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pr title '));
   const copy = join(dir, 'check-title.mjs');
   copyFileSync(script, copy);
+  copyFileSync(fileURLToPath(new URL('./title-rules.mjs', import.meta.url)), join(dir, 'title-rules.mjs'));
   const r = spawnSync(process.execPath, [copy], { env: { PR_TITLE: 'chore: x' }, encoding: 'utf8' });
   assert.equal(r.status, 1, r.stdout);
 });
