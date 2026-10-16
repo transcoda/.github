@@ -1,5 +1,5 @@
 name: PR title
-description: Fails when a pull request title doesn't follow the Transcoda house style, "<Area>: <what changed>".
+description: 'Fails when a pull request title does not follow the Transcoda house style, "<Area>: <what changed>".'
 runs:
   using: composite
   steps:
