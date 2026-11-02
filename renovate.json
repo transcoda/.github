@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "enabledManagers": ["nodenv", "github-actions"],
+  "minimumReleaseAge": "3 days",
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
+  "internalChecksFilter": "strict",
+  "reviewers": ["jhadenfeldt"],
+  "semanticCommitType": "Dependencies",
+  "semanticCommitScope": null,
+  "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}",
+  "packageRules": [
+    {
+      "description": "House-style titles: config:recommended sets chore/fix per package, so override it here; later rules set CI and FFmpeg.",
+      "matchPackageNames": ["*"],
+      "semanticCommitType": "Dependencies"
+    },
+    {
+      "description": "SHA-pinned actions in one PR; Renovate rewrites the SHA and the version comment.",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "semanticCommitType": "CI"
+    },
+    {
+      "description": "Node.js on the LTS line the other repos run; majors by hand.",
+      "matchPackageNames": ["node"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ]
+}
