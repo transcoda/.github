@@ -12,6 +12,8 @@ const run = (over = {}) => ({
   path: '.github/workflows/ci.yml',
   html_url: 'https://example.test/runs/1',
   head_sha: 'abcdef0123',
+  workflow_id: 42,
+  run_number: 7,
   ...over,
 });
 
@@ -61,9 +63,47 @@ describe('plan', () => {
 
 describe('main', () => {
   const list = 'GET /repos/o/r/issues?state=open&labels=main-red&per_page=100&page=1';
+  const runs =
+    'GET /repos/o/r/actions/workflows/42/runs?branch=main&event=push&status=completed&per_page=1';
+  const env = (over) => ({
+    GITHUB_TOKEN: 't',
+    GITHUB_REPOSITORY: 'o/r',
+    WORKFLOW_RUN: JSON.stringify(run(over)),
+    DEFAULT_BRANCH: 'main',
+  });
+
+  it('an older success that finishes after a newer failure leaves the issue open', async () => {
+    const gh = fakeGitHub({
+      [runs]: { workflow_runs: [{ run_number: 8, conclusion: 'failure' }] },
+      [list]: [{ number: 4, body: '<!-- main-red: .github/workflows/ci.yml -->' }],
+    });
+    const lines = [];
+    await main(env({ conclusion: 'success' }), gh.fetch, (l) => lines.push(l));
+    assert.deepEqual(
+      gh.calls.map((c) => c.key),
+      [runs],
+    );
+    assert.equal(lines.at(-1), 'A newer push run (#8, failure) finished first: it decides.');
+  });
+
+  it('acts when the run is the newest finished one', async () => {
+    const gh = fakeGitHub({
+      [runs]: { workflow_runs: [{ run_number: 7, conclusion: 'success' }] },
+      [list]: [{ number: 4, body: '<!-- main-red: .github/workflows/ci.yml -->' }],
+      'POST /repos/o/r/issues/4/comments': {},
+      'PATCH /repos/o/r/issues/4': {},
+    });
+    const lines = [];
+    await main(env({ conclusion: 'success' }), gh.fetch, (l) => lines.push(l));
+    assert.equal(lines.at(-1), 'closed #4');
+  });
 
   it('opens the issue with the label', async () => {
-    const gh = fakeGitHub({ [list]: [], 'POST /repos/o/r/issues': { number: 12 } });
+    const gh = fakeGitHub({
+      [runs]: { workflow_runs: [] },
+      [list]: [],
+      'POST /repos/o/r/issues': { number: 12 },
+    });
     const lines = [];
     await main(
       {

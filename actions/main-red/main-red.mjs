@@ -17,7 +17,7 @@ const FAILED = new Set(['failure', 'timed_out', 'startup_failure']);
  * What to do for one completed run. The issue is keyed by the workflow's file, so renaming the
  * workflow keeps its issue.
  * @param {{ event: string, head_branch: string, conclusion: string | null, name: string,
- *   path: string, html_url: string, head_sha: string }} run
+ *   path: string, html_url: string, head_sha: string, workflow_id: number, run_number: number }} run
  * @param {string} defaultBranch
  * @param {import('../../lib/issues.mjs').OpenIssue[]} open
  * @returns {import('../../lib/issues.mjs').Action[]}
@@ -48,6 +48,15 @@ export function plan(run, defaultBranch, open) {
   return [];
 }
 
+/** The newest finished push run of the workflow on the branch, when it is newer than `run`. */
+export async function newerRun(api, repo, branch, run) {
+  const { workflow_runs: runs } = await api(
+    `/repos/${repo}/actions/workflows/${run.workflow_id}/runs?branch=${encodeURIComponent(branch)}&event=push&status=completed&per_page=1`,
+  );
+  const newest = runs[0];
+  return newest && newest.run_number > run.run_number ? newest : null;
+}
+
 export async function main(env = process.env, fetchImpl = globalThis.fetch, log = console.log) {
   const run = JSON.parse(env.WORKFLOW_RUN || 'null');
   if (!run?.path) throw new Error('No workflow_run event: run this action on `workflow_run`.');
@@ -60,6 +69,13 @@ export async function main(env = process.env, fetchImpl = globalThis.fetch, log 
     return;
   }
   const api = client(env.GITHUB_TOKEN ?? '', fetchImpl);
+  // Runs can finish out of order: an older run that finishes after a newer one would undo what the
+  // newer one said (close the issue its failure opened, or open one although it passed).
+  const newer = await newerRun(api, repo, branch, run);
+  if (newer) {
+    log(`A newer push run (#${newer.run_number}, ${newer.conclusion}) finished first: it decides.`);
+    return;
+  }
   const actions = plan(run, branch, await openIssues(api, repo, label, KIND));
   if (actions.length === 0) log('Nothing to do.');
   await apply(api, repo, label, KIND, actions, log);
