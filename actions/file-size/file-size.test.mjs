@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { baselineErrors, countLines, parseArgs, sizeErrors } from './file-size.mjs';
+import { baselineErrors, countLines, parseArgs, parseRenames, sizeErrors } from './file-size.mjs';
 
 const script = fileURLToPath(new URL('./file-size.mjs', import.meta.url));
 const lines = (n) => 'x\n'.repeat(n);
@@ -67,6 +67,62 @@ describe('baselineErrors', () => {
       'list.json raises a.ts from 8 to 9 lines; the numbers may only go down. Move code out of it instead.',
       'list.json adds d.ts; the allowlist only takes files away. Split the file instead.',
     ]);
+  });
+
+  it('compares a moved file with its old path, so a move alone adds nothing', () => {
+    const renames = new Map([
+      ['new/a.ts', 'old/a.ts'],
+      ['new/b.ts', 'old/b.ts'],
+      ['new/c.ts', 'old/c.ts'],
+    ]);
+    const errors = baselineErrors(
+      { 'new/a.ts': 30, 'new/b.ts': 19, 'new/c.ts': 41, 'd.ts': 50 },
+      { 'old/a.ts': 30, 'old/b.ts': 20, 'old/c.ts': 40 },
+      'list.json',
+      renames,
+    ).map((e) => e.message);
+    assert.deepEqual(errors, [
+      'list.json raises new/c.ts (moved from old/c.ts) from 40 to 41 lines; the numbers may only go down. Move code out of it instead.',
+      'list.json adds d.ts; the allowlist only takes files away. Split the file instead.',
+    ]);
+  });
+
+  it('fails a moved file whose old path was not listed', () => {
+    const errors = baselineErrors(
+      { 'new/a.ts': 30 },
+      {},
+      'list.json',
+      new Map([['new/a.ts', 'old/a.ts']]),
+    );
+    assert.match(errors[0].message, /adds new\/a\.ts;/);
+  });
+});
+
+describe('parseRenames', () => {
+  it('maps new paths to old ones and skips other changes', () => {
+    const output = [
+      'M',
+      'kept.ts',
+      'R100',
+      'a.ts',
+      'src/a.ts',
+      'A',
+      'added.ts',
+      'R087',
+      'b.ts',
+      'lib/b.ts',
+      'D',
+      'gone.ts',
+      '',
+    ].join('\0');
+    assert.deepEqual(
+      parseRenames(output),
+      new Map([
+        ['src/a.ts', 'a.ts'],
+        ['lib/b.ts', 'b.ts'],
+      ]),
+    );
+    assert.deepEqual(parseRenames(''), new Map());
   });
 });
 
@@ -166,6 +222,24 @@ describe('the script with --base', () => {
     const r = run('--base', base);
     assert.equal(r.status, 1);
     assert.match(r.stderr, /raises big\.ts from 8 to 9 lines/);
+  });
+
+  it('passes a file moved with its entry, and fails it once it grew', () => {
+    writeFileSync(join(repo, 'big.ts'), lines(8));
+    writeFileSync(join(repo, 'list.json'), JSON.stringify({ 'big.ts': 8 }));
+    mkdirSync(join(repo, 'src'));
+    git('mv', 'big.ts', 'src/big.ts');
+    writeFileSync(join(repo, 'list.json'), JSON.stringify({ 'src/big.ts': 8 }));
+    const moved = run('--base', base);
+    assert.equal(moved.status, 0, moved.stderr);
+    writeFileSync(join(repo, 'src/big.ts'), lines(9));
+    writeFileSync(join(repo, 'list.json'), JSON.stringify({ 'src/big.ts': 9 }));
+    const grew = run('--base', base);
+    assert.equal(grew.status, 1);
+    assert.match(grew.stderr, /raises src\/big\.ts \(moved from big\.ts\) from 8 to 9 lines/);
+    git('mv', 'src/big.ts', 'big.ts');
+    writeFileSync(join(repo, 'big.ts'), lines(8));
+    writeFileSync(join(repo, 'list.json'), JSON.stringify({ 'big.ts': 8 }));
   });
 
   it('takes a base without the allowlist (the pull request that adds it) as no comparison', () => {
