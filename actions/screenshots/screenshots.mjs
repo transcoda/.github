@@ -9,16 +9,33 @@ import { matcher } from '../../lib/glob.mjs';
 import { isMain } from '../../lib/main.mjs';
 
 /**
- * True when the text shows an image or a recording: Markdown `![alt](url)`, an HTML `<img>` or
- * `<video>`, or a GitHub attachment link (an uploaded recording is a bare link on its own line).
- * HTML comments do not count, so a template's commented-out example is not a screenshot.
+ * True when the text shows an image or a recording: a Markdown image, inline `![alt](url)` or by
+ * reference `![alt][label]` with its `[label]: url` definition, an HTML `<img>` or `<video>`, or a
+ * GitHub attachment link (an uploaded recording is a bare link on its own line). HTML comments
+ * and code (fenced blocks and inline spans) do not count: GitHub shows those as text, so a
+ * template's commented-out example or a code sample is not a screenshot.
  */
 export function hasImage(body) {
-  const text = (body ?? '').replace(/<!--[\s\S]*?(?:-->|$)/g, '');
-  return (
+  const text = (body ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, '')
+    .replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:\n {0,3}\1[`~]*[ \t]*(?=\n|$)|$)/gm, '')
+    // An inline span stays within one paragraph.
+    .replace(/(`+)(?:(?!\n\s*\n)[\s\S])*?\1/g, '');
+  if (
     /!\[[^\]]*\]\(\s*<?[^\s)>]+/.test(text) ||
     /<(?:img|video)\b[^>]*\bsrc\s*=\s*["']?[^\s"'>]+/i.test(text) ||
     /https:\/\/github\.com\/user-attachments\/assets\/[\w-]+/.test(text)
+  ) {
+    return true;
+  }
+  const label = (l) => l.trim().replace(/\s+/g, ' ').toLowerCase();
+  const defined = new Set(
+    [...text.matchAll(/^ {0,3}\[([^\]]+)\]:[ \t]*\S/gm)].map(([, l]) => label(l)),
+  );
+  // `![alt][label]`, `![alt][]` and `![alt]` use the label, or the alt text when it is empty.
+  return [...text.matchAll(/!\[([^\]]*)\](?:\[([^\]]*)\])?/g)].some(([, alt, ref]) =>
+    defined.has(label(ref || alt)),
   );
 }
 

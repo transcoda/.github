@@ -27,6 +27,24 @@ describe('hasImage', () => {
     assert.ok(!hasImage('## Screenshots\n<!-- ![before](before.png) ![after](after.png) -->'));
     assert.ok(!hasImage('<!-- unclosed ![x](y.png)'));
   });
+
+  it('ignores images in fenced blocks and inline code, not after them', () => {
+    assert.ok(!hasImage('Use this:\n\n```md\n![example](example.png)\n```\n'));
+    assert.ok(!hasImage('~~~\n<img src="x.png">\n~~~'));
+    assert.ok(!hasImage('Write `![alt](shot.png)` in the description.'));
+    assert.ok(!hasImage('```\n![never closed](x.png)'));
+    assert.ok(hasImage('```\ncode\n```\n\n![after](https://example.test/a.png)'));
+    assert.ok(hasImage('`code` and ![after](https://example.test/a.png)'));
+    assert.ok(hasImage("Don't ` stray\n\n![after](https://example.test/a.png)\n\nlater `x`"));
+  });
+
+  it('finds reference-style images with a definition, not plain reference links', () => {
+    assert.ok(hasImage('![after][shot]\n\n[shot]: https://example.test/after.png'));
+    assert.ok(hasImage('![Shot][]\n\n[shot]: https://example.test/after.png'));
+    assert.ok(hasImage('![shot]\n\n[shot]: https://example.test/after.png'));
+    assert.ok(!hasImage('![after][missing]'));
+    assert.ok(!hasImage('[after][shot]\n\n[shot]: https://example.test/after.png'));
+  });
 });
 
 describe('screenshotError', () => {
