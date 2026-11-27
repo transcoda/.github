@@ -64,7 +64,7 @@ export async function main(env = process.env, fetchImpl = globalThis.fetch, log 
   if (error) {
     for (const line of error.split('\n')) log(line);
     log(
-      `::error::${error.split('\n')[0]} Add before and after screenshots, or the "${skipLabel}" label.`,
+      `::error::A UI change needs before and after screenshots in its description, or the "${skipLabel}" label.`,
     );
     return 1;
   }

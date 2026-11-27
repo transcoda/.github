@@ -26,6 +26,13 @@ jobs:
       # Biome (this repository follows its own base config) and every test, the actions' and the
       # shared config's.
       - run: pnpm check
+      # This repository keeps a file-size budget too, with its own action.
+      - uses: ./actions/file-size
+        with:
+          max-lines: 400
+          globs: |
+            **/*.{mjs,yml,json}
+            !pnpm-lock.yaml
 
   pr-title:
     if: github.event_name == 'pull_request'
