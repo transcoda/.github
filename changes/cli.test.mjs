@@ -98,3 +98,17 @@ it('bad arguments exit 2 with the usage', () => {
     'y',
   ]);
 });
+
+it('check: a note moved into .changes/, and a name with non-ASCII letters, count', () => {
+  const { cwd, head } = repo({ 'draft.md': note() });
+  git(cwd, 'mv', 'draft.md', 'café.md');
+  git(cwd, 'commit', '-q', '-m', 'rename in place');
+  const mid = git(cwd, 'rev-parse', 'HEAD');
+  mkdirSync(join(cwd, '.changes'));
+  git(cwd, 'mv', 'café.md', '.changes/café.md');
+  git(cwd, 'commit', '-q', '-m', 'move');
+  const r = run(cwd, 'check', mid, git(cwd, 'rev-parse', 'HEAD'), '[]');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, 'Release note found: .changes/café.md\n');
+  assert.equal(run(cwd, 'check', head, mid, '[]').status, 1);
+});

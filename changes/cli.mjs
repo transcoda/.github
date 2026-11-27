@@ -55,13 +55,14 @@ export function run(argv, root = process.cwd(), out = console.log, err = console
   const [base, head, labelsJson, author = ''] = args.positional;
   const changed = execFileSync(
     'git',
-    ['diff', '--name-only', '--diff-filter=AM', `${base}...${head}`],
+    // Renamed counts by its new name (a note moved into .changes/); -z keeps names unquoted.
+    ['diff', '--name-only', '-z', '--diff-filter=AMR', `${base}...${head}`],
     {
       cwd: root,
       encoding: 'utf8',
     },
   )
-    .split('\n')
+    .split('\0')
     .filter(Boolean);
   const { ok, messages } = checkPullRequest({
     changed,
