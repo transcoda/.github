@@ -101,7 +101,14 @@ failing, closed when it passes again. A run that failed outside its tests (insta
 script) gets one "the run failed outside its tests" issue; more than ten new failures at once get
 one "many tests fail" issue listing them. Issues are found again by a hidden
 `<!-- nightly-test: <test id> -->` line, the same one core's `scripts/nightly-issues.ts` wrote, so
-the issues it opened carry on.
+the issues it opened carry on. A test id is kept to one line, and `-->` in a test name is written
+`-- >`, so every id comes back out of its marker unchanged. A file that failed to load gets a
+`<file> (the file)` issue, closed once its tests run again.
+
+Against duplicates, the action lists the open issues again right before it opens one, and skips
+opening it when an issue with that marker has appeared in the meantime. Give the
+nightly workflow a `concurrency` group (`group: nightly`, `cancel-in-progress: false`), as both
+nightlies have, so two runs never plan at the same time.
 
 | Input | Default | |
 | --- | --- | --- |
@@ -184,10 +191,17 @@ count as failures; cancelled and skipped runs change nothing. Each workflow has 
 found again by a hidden `<!-- main-red: .github/workflows/<file> -->` line. Pull request runs and
 other branches are ignored, so it can watch workflows that also run on pull requests.
 
+Runs can finish out of order. Before it acts, the action looks up the newest finished push run of
+the workflow on the branch; when that is a newer run than the one it was started for, it does
+nothing, so an older success can't close the issue a newer failure opened (nor an older failure
+open one after a newer success). Like `nightly-issues`, it lists the open issues again right before
+opening one, so two failures finishing together open one issue. Don't give this workflow a
+`concurrency` group: GitHub would cancel the pending runs it queues.
+
 | Input | Default | |
 | --- | --- | --- |
 | `label` | `main-red` | The label the issues get and are found by. |
-| `token` | `${{ github.token }}` | Needs `issues: write`. |
+| `token` | `${{ github.token }}` | Needs `issues: write` and `actions: read`. |
 
 Add it as its own workflow, started when the watched workflows complete. GitHub reads
 `workflow_run` workflows from the default branch only, so it starts working once merged:
@@ -209,6 +223,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
+      actions: read
       issues: write
     steps:
       - uses: transcoda/.github/actions/main-red@<sha> # v1.1.0
@@ -223,11 +238,17 @@ fits the budget again fails until it is removed; an entry for a file that is gon
 the ones git knows: tracked, plus new files that are not ignored. Lines are counted as an editor
 shows them (a final newline does not add one).
 
+On a pull request the allowlist is also compared with the one at the pull request's base commit
+(fetched if the checkout lacks it): an entry that is new there, or whose number went up, fails, so
+a file can't grow by raising its own number. When the base has no allowlist yet (the pull request
+that adds it), there is nothing to compare.
+
 | Input | Default | |
 | --- | --- | --- |
 | `globs` | required | Files to check, one glob per line, relative to the repository root. `**` spans directories, `*` and `?` stay within one, `{a,b}` is either; a line starting with `!` excludes; `#` lines are comments. |
 | `max-lines` | required | The most lines a file may have. |
 | `allowlist` | `''` | A JSON file `{ "path": lines }` of the files over the budget. |
+| `base` | `${{ github.event.pull_request.base.sha }}` | The commit to compare the allowlist with. Empty (as on a push) skips the comparison. |
 
 ```yaml
     steps:
@@ -257,16 +278,18 @@ transcoda-file-size --max-lines 1200 --allowlist .github/file-size-allowlist.jso
   'apps/**/*.{ts,tsx,css}' 'packages/**/*.ts' '!**/fixtures/**'
 ```
 
-It exits 0 when every file fits, 1 with one line per problem (a `::error file=…::` annotation on
-Actions), 2 for bad arguments or a bad allowlist.
+Add `--base <commit>` for the comparison with the base's allowlist. It exits 0 when every file
+fits, 1 with one line per problem (a `::error file=…::` annotation on Actions), 2 for bad
+arguments, globs that only exclude, a bad allowlist or a base commit it can't find.
 
 ### `actions/screenshots`
 
 Fails a pull request that changes files matching the globs (the UI) when its description shows no
-image: a Markdown image `![…](…)`, an `<img>` or `<video>` with a `src`, or a GitHub attachment
+image: a Markdown image, inline `![…](…)` or by reference `![…][label]` with its `[label]: url`
+definition, an `<img>` or `<video>` with a `src`, or a GitHub attachment
 link (`https://github.com/user-attachments/assets/…`, which is how an uploaded recording appears).
-Anything inside an HTML comment does not count, so a template's commented-out example is not a
-screenshot. A renamed file counts by its old and its new path. A label skips the check.
+Anything inside an HTML comment, a fenced code block or an inline code span does not count, so a
+template's commented-out example or a code sample is not a screenshot. A renamed file counts by its old and its new path. A label skips the check.
 
 | Input | Default | |
 | --- | --- | --- |
