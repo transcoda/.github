@@ -10,4 +10,3 @@ if (errors.length > 0) {
   process.exit(1);
 }
 console.log(`Title follows the house style: ${title}`);
-

@@ -1,10 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":semanticCommits"],
-  "enabledManagers": ["nodenv", "github-actions"],
+  "extends": ["config:recommended", ":pinAllExceptPeerDependencies", ":semanticCommits"],
+  "enabledManagers": ["npm", "nodenv", "github-actions"],
   "minimumReleaseAge": "3 days",
   "minimumReleaseAgeBehaviour": "timestamp-optional",
   "internalChecksFilter": "strict",
+  "rangeStrategy": "pin",
   "reviewers": ["jhadenfeldt"],
   "semanticCommitType": "Dependencies",
   "semanticCommitScope": null,

@@ -1,8 +1,20 @@
 name: Release note
-description: Checks out the pull request and runs the repository's own release-note checker with the PR's base, head, labels and author.
+description: Checks out the pull request and fails unless it adds a valid .changes/ release note or carries the "no user-facing change" label.
 inputs:
+  layout:
+    description: >-
+      "flat" (.changes/<short-name>.md) or "per-folder" (.changes/<folder>/<short-name>.md, see
+      `folders`): the shared checker in this repository. Empty runs the repository's own `script`
+      instead (the v1.0.0 behaviour, kept until both repositories have moved).
+    default: ''
+  folders:
+    description: For the per-folder layout, the directory whose subdirectories are the note folders, e.g. plugins.
+    default: ''
+  skip-authors:
+    description: Logins whose pull requests need no note, comma-separated, e.g. renovate[bot].
+    default: ''
   script:
-    description: The repository's checker, run as `node <script> <base-sha> <head-sha> <labels-json> <author-login>`.
+    description: Without `layout` only, the repository's own checker, run as `node <script> <base-sha> <head-sha> <labels-json> <author-login>`. Deprecated.
     default: scripts/check-release-note.mjs
 runs:
   using: composite
@@ -17,9 +29,27 @@ runs:
     - name: Check for a release note
       shell: bash
       env:
+        LAYOUT: ${{ inputs.layout }}
+        FOLDERS: ${{ inputs.folders }}
+        SKIP_AUTHORS: ${{ inputs.skip-authors }}
         SCRIPT: ${{ inputs.script }}
         BASE: ${{ github.event.pull_request.base.sha }}
         HEAD: ${{ github.event.pull_request.head.sha }}
         LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         AUTHOR: ${{ github.event.pull_request.user.login }}
-      run: node "$SCRIPT" "$BASE" "$HEAD" "$LABELS" "$AUTHOR"
+      run: |
+        case "$LAYOUT" in
+          '') exec node "$SCRIPT" "$BASE" "$HEAD" "$LABELS" "$AUTHOR" ;;
+          flat) args=() ;;
+          per-folder)
+            if [ -z "$FOLDERS" ]; then
+              echo '::error::The per-folder layout needs the folders input (e.g. plugins).'
+              exit 2
+            fi
+            args=(--per-folder "$FOLDERS") ;;
+          *)
+            echo "::error::layout must be flat or per-folder, not \"$LAYOUT\"."
+            exit 2 ;;
+        esac
+        node "$GITHUB_ACTION_PATH/../../changes/cli.mjs" check "$BASE" "$HEAD" "$LABELS" "$AUTHOR" \
+          "${args[@]}" --skip-authors "$SKIP_AUTHORS"

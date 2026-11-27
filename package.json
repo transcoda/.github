@@ -4,11 +4,35 @@
   "private": true,
   "type": "module",
   "license": "GPL-3.0-only",
-  "description": "Shared dev config for the transcoda repositories: Biome and TypeScript bases, and the .changes release-note format.",
-  "packageManager": "pnpm@12.21.0",
+  "description": "Shared dev config for the transcoda repositories: Biome and TypeScript bases, the .changes release-note format, and the file-size budget.",
+  "packageManager": "pnpm@12.23.0",
   "exports": {
     "./biome": "./biome/base.json",
-    "./tsconfig.base.json": "./tsconfig/base.json"
+    "./biome/*.grit": "./biome/*.grit",
+    "./tsconfig.base.json": "./tsconfig/base.json",
+    "./changes": "./changes/notes.mjs"
   },
-  "files": ["biome", "tsconfig"]
+  "bin": {
+    "transcoda-release-note": "./changes/cli.mjs",
+    "transcoda-file-size": "./actions/file-size/file-size.mjs"
+  },
+  "files": [
+    "biome/*.json",
+    "biome/*.grit",
+    "tsconfig",
+    "changes/*.mjs",
+    "!changes/*.test.mjs",
+    "lib/glob.mjs",
+    "lib/main.mjs",
+    "actions/file-size/file-size.mjs"
+  ],
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "node --test",
+    "check": "pnpm lint && pnpm test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8"
+  }
 }

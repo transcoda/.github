@@ -1,0 +1,36 @@
+name: Nightly issues
+description: Opens a GitHub issue per failing test from vitest and Playwright JSON reports, comments while it keeps failing, and closes it when the test passes again.
+inputs:
+  reports:
+    description: Paths of the JSON reports (vitest or Playwright, told apart by shape), one per line. A missing file counts as "nothing ran there" and marks the run failed.
+    required: true
+  run-failed:
+    description: '"true" when the test job failed (or was skipped); without a failing test that opens the "run failed outside its tests" issue.'
+    default: 'false'
+  step-failed:
+    description: '"true" when a step that is not a test failed (typecheck, lint, build): opens the run issue even when tests fail too.'
+    default: 'false'
+  test-root:
+    description: Where the tests ran, so vitest's absolute paths become relative ones (the issue ids).
+    default: ${{ github.workspace }}
+  label:
+    description: The label the issues get and are found by.
+    default: nightly
+  token:
+    description: Token with issues write permission.
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: Open, update and close the nightly issues
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        REPORTS: ${{ inputs.reports }}
+        RUN_FAILED: ${{ inputs.run-failed }}
+        STEP_FAILED: ${{ inputs.step-failed }}
+        TEST_ROOT: ${{ inputs.test-root }}
+        LABEL: ${{ inputs.label }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        SHA: ${{ github.sha }}
+      run: node "$GITHUB_ACTION_PATH/nightly-issues.mjs"
