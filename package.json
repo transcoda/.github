@@ -1,0 +1,14 @@
+{
+  "name": "@transcoda/dev-config",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "description": "Shared dev config for the transcoda repositories: Biome and TypeScript bases, and the .changes release-note format.",
+  "packageManager": "pnpm@12.21.0",
+  "exports": {
+    "./biome": "./biome/base.json",
+    "./tsconfig.base.json": "./tsconfig/base.json"
+  },
+  "files": ["biome", "tsconfig"]
+}
