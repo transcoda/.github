@@ -1,0 +1,23 @@
+name: Nightly changed
+description: Says whether this repository's branch, or another repository's main, moved since the last completed run of the calling workflow (output `run`, "true" or "false"). A manual run always runs.
+inputs:
+  also-watch:
+    description: Other repositories (owner/name, one per line) whose main getting a commit since the last run also counts.
+    default: ''
+  token:
+    description: Token that can read this repository's Actions runs (actions read) and the watched repositories' commits.
+    default: ${{ github.token }}
+outputs:
+  run:
+    description: '"true" when there is something new to test, else "false".'
+    value: ${{ steps.decide.outputs.run }}
+runs:
+  using: composite
+  steps:
+    - id: decide
+      name: Did anything move since the last run?
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        WATCH: ${{ inputs.also-watch }}
+      run: node "$GITHUB_ACTION_PATH/nightly-changed.mjs"

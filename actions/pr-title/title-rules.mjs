@@ -9,7 +9,9 @@ export function titleErrors(title) {
   if (title !== title.trim()) return ['Remove the spaces at the start or end of the title.'];
   const match = /^([^:]+): (.*)$/.exec(title);
   if (!match) {
-    return ['Start the title with an area and a colon, e.g. "Plugins: warn when a mapping is missing".'];
+    return [
+      'Start the title with an area and a colon, e.g. "Plugins: warn when a mapping is missing".',
+    ];
   }
   const [, area, description] = match;
   const errors = [];

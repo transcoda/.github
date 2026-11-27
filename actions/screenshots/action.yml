@@ -1,0 +1,25 @@
+name: Screenshots
+description: Fails a pull request that changes files matching the globs (the UI) when its description has no image; a label skips the check.
+inputs:
+  paths:
+    description: The UI files, one glob per line; a line starting with ! excludes (tests, fixtures).
+    required: true
+  skip-label:
+    description: The label that says no screenshots are needed.
+    default: no screenshots needed
+  token:
+    description: Token that can read the pull request's files (pull-requests read).
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: Check for screenshots
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        PATHS: ${{ inputs.paths }}
+        SKIP_LABEL: ${{ inputs.skip-label }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_BODY: ${{ github.event.pull_request.body }}
+        PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      run: node "$GITHUB_ACTION_PATH/screenshots.mjs"

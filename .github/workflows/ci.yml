@@ -17,10 +17,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-      - run: node --test 'actions/**/*.test.mjs'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Biome (this repository follows its own base config) and every test, the actions' and the
+      # shared config's.
+      - run: pnpm check
+      # This repository keeps a file-size budget too, with its own action.
+      - uses: ./actions/file-size
+        with:
+          max-lines: 400
+          globs: |
+            **/*.{mjs,yml,json}
+            !pnpm-lock.yaml
 
   pr-title:
     if: github.event_name == 'pull_request'

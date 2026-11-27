@@ -1,0 +1,38 @@
+{
+  "formatter": { "indentStyle": "space", "lineWidth": 100 },
+  "javascript": { "formatter": { "quoteStyle": "single" } },
+  "markdown": { "formatter": { "enabled": false } },
+  "yaml": { "formatter": { "enabled": false } },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "correctness": { "useImportExtensions": "error" },
+      "nursery": { "noFloatingPromises": "error", "useAwaitThenable": "error" },
+      "style": {
+        "noDefaultExport": "error",
+        "noNonNullAssertion": "error",
+        "useConsistentArrayType": "error",
+        "useConsistentTestIt": "error",
+        "useTestHooksOnTop": "error"
+      },
+      "suspicious": {
+        "noDeprecatedImports": "error",
+        "noExplicitAny": "error",
+        "noFocusedTests": "error",
+        "noImportCycles": "error",
+        "noSkippedTests": "error"
+      }
+    }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["**/src/**"],
+      "linter": { "rules": { "suspicious": { "noConsole": "error" } } }
+    },
+    {
+      "includes": ["**/*.config.ts", "**/*.config.mts", "**/*.config.js", "**/*.config.mjs"],
+      "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
+    }
+  ]
+}
