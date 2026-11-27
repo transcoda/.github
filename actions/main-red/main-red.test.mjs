@@ -76,7 +76,9 @@ describe('main', () => {
       (l) => lines.push(l),
     );
     assert.deepEqual(lines, ['CI (push to main): failure', 'opened #12: Red main: CI fails']);
-    assert.deepEqual(gh.calls[1].body.labels, ['main-red']);
+    assert.deepEqual(gh.calls.find((c) => c.key === 'POST /repos/o/r/issues').body.labels, [
+      'main-red',
+    ]);
   });
 
   it('does not call GitHub for a run that is not a push to the default branch', async () => {

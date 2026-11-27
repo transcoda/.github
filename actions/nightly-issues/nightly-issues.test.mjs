@@ -334,7 +334,9 @@ describe('main', () => {
       'opened #10: Nightly: src/a.test.ts > breaks',
       'closed #4',
     ]);
-    assert.deepEqual(gh.calls[1].body.labels, ['nightly-plugins']);
+    assert.deepEqual(gh.calls.find((c) => c.key === 'POST /repos/o/r/issues').body.labels, [
+      'nightly-plugins',
+    ]);
   });
 
   it('a missing report fails the run; DRY_RUN writes nothing', async () => {

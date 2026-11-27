@@ -227,7 +227,7 @@ export async function main(env = process.env, fetchImpl = globalThis.fetch, log 
     for (const line of describe(actions)) log(line);
     return;
   }
-  await apply(api, repo, label, actions, log);
+  await apply(api, repo, label, KIND, actions, log);
 }
 
 if (isMain(import.meta.url)) await main();

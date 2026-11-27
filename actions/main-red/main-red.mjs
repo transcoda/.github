@@ -62,7 +62,7 @@ export async function main(env = process.env, fetchImpl = globalThis.fetch, log 
   const api = client(env.GITHUB_TOKEN ?? '', fetchImpl);
   const actions = plan(run, branch, await openIssues(api, repo, label, KIND));
   if (actions.length === 0) log('Nothing to do.');
-  await apply(api, repo, label, actions, log);
+  await apply(api, repo, label, KIND, actions, log);
 }
 
 if (isMain(import.meta.url)) await main();
