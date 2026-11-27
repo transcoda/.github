@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { countLines, parseArgs, sizeErrors } from './file-size.mjs';
+import { baselineErrors, countLines, parseArgs, sizeErrors } from './file-size.mjs';
 
 const script = fileURLToPath(new URL('./file-size.mjs', import.meta.url));
 const lines = (n) => 'x\n'.repeat(n);
@@ -56,11 +56,26 @@ describe('sizeErrors', () => {
   });
 });
 
+describe('baselineErrors', () => {
+  it('fails an entry the base did not have, or one raised since; lowered and kept ones pass', () => {
+    const errors = baselineErrors(
+      { 'a.ts': 9, 'b.ts': 20, 'c.ts': 30, 'd.ts': 40 },
+      { 'a.ts': 8, 'b.ts': 25, 'c.ts': 30 },
+      'list.json',
+    ).map((e) => e.message);
+    assert.deepEqual(errors, [
+      'list.json raises a.ts from 8 to 9 lines; the numbers may only go down. Move code out of it instead.',
+      'list.json adds d.ts; the allowlist only takes files away. Split the file instead.',
+    ]);
+  });
+});
+
 describe('parseArgs', () => {
   it('needs a budget and a glob', () => {
-    assert.deepEqual(parseArgs(['--max-lines', '5', 'a/**']), {
+    assert.deepEqual(parseArgs(['--max-lines', '5', '--base', 'abc', 'a/**']), {
       max: 5,
       allowlist: '',
+      base: 'abc',
       globs: ['a/**'],
     });
     assert.throws(() => parseArgs(['a/**']), /--max-lines/);
@@ -109,5 +124,57 @@ describe('the script', () => {
     const r = run('--max-lines', '5', '--allowlist', 'bad.json', 'src/**');
     assert.equal(r.status, 2);
     assert.match(r.stderr, /needs a whole number of lines/);
+  });
+
+  it('exits 2 for globs that only exclude', () => {
+    const r = run('--max-lines', '5', '!**/*.test.ts');
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /only exclusions/);
+  });
+});
+
+describe('the script with --base', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'file size base '));
+  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  git('init', '-q');
+  git('config', 'user.email', 't@example.invalid');
+  git('config', 'user.name', 't');
+  git('config', 'commit.gpgsign', 'false');
+  writeFileSync(join(repo, 'a.ts'), lines(1));
+  git('add', '.');
+  git('commit', '-q', '-m', 'before the allowlist');
+  const noList = git('rev-parse', 'HEAD');
+  writeFileSync(join(repo, 'big.ts'), lines(8));
+  writeFileSync(join(repo, 'list.json'), JSON.stringify({ 'big.ts': 8 }));
+  git('add', '.');
+  git('commit', '-q', '-m', 'allowlist');
+  const base = git('rev-parse', 'HEAD');
+  const run = (...args) =>
+    spawnSync(
+      process.execPath,
+      [script, '--max-lines', '5', '--allowlist', 'list.json', ...args, '**/*.ts'],
+      {
+        cwd: repo,
+        encoding: 'utf8',
+      },
+    );
+
+  it('fails a file that grew together with its number', () => {
+    writeFileSync(join(repo, 'big.ts'), lines(9));
+    writeFileSync(join(repo, 'list.json'), JSON.stringify({ 'big.ts': 9 }));
+    assert.equal(run().status, 0);
+    const r = run('--base', base);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /raises big\.ts from 8 to 9 lines/);
+  });
+
+  it('takes a base without the allowlist (the pull request that adds it) as no comparison', () => {
+    assert.equal(run('--base', noList).status, 0);
+  });
+
+  it('exits 2 for a base it cannot find', () => {
+    const r = run('--base', '0000000000000000000000000000000000000001');
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /could not be fetched/);
   });
 });

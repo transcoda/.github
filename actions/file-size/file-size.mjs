@@ -3,11 +3,14 @@
 // it are listed in an allowlist (JSON: { "path": lines }) with their current count, which may only
 // shrink: a listed file that grows past its count fails, and one that got smaller fails too, asking
 // for the lower number, so the list never hides room to grow again.
-//   transcoda-file-size --max-lines 1200 [--allowlist file-size-allowlist.json] <glob>... [!<glob>...]
+//   transcoda-file-size --max-lines 1200 [--allowlist file-size-allowlist.json] [--base <git-ref>]
+//     <glob>... [!<glob>...]
+// With --base (a pull request's base commit), the allowlist is also compared with the one at that
+// commit: no entry may be added or raised there, so a file can't grow by raising its own number.
 // Files are the ones git knows (tracked, plus new ones that are not ignored), from the current
 // directory, which must be the repository root. Run by action.yml, and by a repository's own
 // `pnpm check` through the @transcoda/dev-config bin.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { matcher } from '../../lib/glob.mjs';
 import { isMain } from '../../lib/main.mjs';
@@ -67,11 +70,12 @@ export function sizeErrors(sizes, allowlist, max, allowlistPath) {
 }
 
 export function parseArgs(argv) {
-  const args = { max: Number.NaN, allowlist: '', globs: [] };
+  const args = { max: Number.NaN, allowlist: '', base: '', globs: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--max-lines') args.max = Number(argv[++i]);
     else if (a === '--allowlist') args.allowlist = argv[++i] ?? '';
+    else if (a === '--base') args.base = argv[++i] ?? '';
     else if (a.startsWith('--')) throw new Error(`Unknown option ${a}.`);
     else args.globs.push(a);
   }
@@ -82,10 +86,8 @@ export function parseArgs(argv) {
   return args;
 }
 
-function readAllowlist(path) {
-  if (!path) return {};
-  if (!existsSync(path)) throw new Error(`The allowlist ${path} does not exist.`);
-  const list = JSON.parse(readFileSync(path, 'utf8'));
+function parseAllowlist(text, path) {
+  const list = JSON.parse(text);
   for (const [file, lines] of Object.entries(list)) {
     if (!Number.isInteger(lines) || lines < 1) {
       throw new Error(
@@ -96,18 +98,64 @@ function readAllowlist(path) {
   return list;
 }
 
+function readAllowlist(path) {
+  if (!path) return {};
+  if (!existsSync(path)) throw new Error(`The allowlist ${path} does not exist.`);
+  return parseAllowlist(readFileSync(path, 'utf8'), path);
+}
+
+/**
+ * The allowlist at the base commit, fetched if the checkout lacks it; null when the allowlist did
+ * not exist there yet (the pull request that adds it).
+ */
+function readBaseAllowlist(path, base) {
+  const git = (...args) =>
+    spawnSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (git('cat-file', '-e', `${base}^{commit}`).status !== 0) {
+    git('fetch', '--no-tags', '--depth=1', 'origin', base);
+    if (git('cat-file', '-e', `${base}^{commit}`).status !== 0) {
+      throw new Error(`The base commit ${base} is not in the checkout and could not be fetched.`);
+    }
+  }
+  const shown = git('show', `${base}:${path}`);
+  return shown.status === 0 ? parseAllowlist(shown.stdout, `${path} at ${base}`) : null;
+}
+
+/** Entries the allowlist adds or raises compared with the base's: both only hide growth. */
+export function baselineErrors(allowlist, base, path) {
+  const errors = [];
+  for (const [file, lines] of Object.entries(allowlist)) {
+    const before = base[file];
+    if (before === undefined) {
+      errors.push({
+        file: path,
+        message: `${path} adds ${file}; the allowlist only takes files away. Split the file instead.`,
+      });
+    } else if (lines > before) {
+      errors.push({
+        file: path,
+        message: `${path} raises ${file} from ${before} to ${lines} lines; the numbers may only go down. Move code out of it instead.`,
+      });
+    }
+  }
+  return errors;
+}
+
 /** Runs the check in the current directory; returns the exit code. */
 export function run(argv, env = process.env, out = console.log, err = console.error) {
   let args;
   let allowlist;
+  let base = null;
+  let matches;
   try {
     args = parseArgs(argv);
+    matches = matcher(args.globs);
     allowlist = readAllowlist(args.allowlist);
+    if (args.base && args.allowlist) base = readBaseAllowlist(args.allowlist, args.base);
   } catch (error) {
     err(error.message);
     return 2;
   }
-  const matches = matcher(args.globs);
   const files = execFileSync(
     'git',
     ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--deduplicate'],
@@ -116,7 +164,11 @@ export function run(argv, env = process.env, out = console.log, err = console.er
     .split('\0')
     .filter((f) => f && matches(f) && existsSync(f));
   const sizes = new Map(files.map((f) => [f, countLines(readFileSync(f, 'utf8'))]));
-  const errors = sizeErrors(sizes, allowlist, args.max, args.allowlist || 'the allowlist');
+  const listName = args.allowlist || 'the allowlist';
+  const errors = [
+    ...(base ? baselineErrors(allowlist, base, listName) : []),
+    ...sizeErrors(sizes, allowlist, args.max, listName),
+  ];
   for (const e of errors) {
     err(env.GITHUB_ACTIONS === 'true' ? `::error file=${e.file}::${e.message}` : e.message);
   }

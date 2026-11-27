@@ -10,6 +10,9 @@ inputs:
   allowlist:
     description: 'JSON file of files already over the budget, { "path": current lines }. Empty for none.'
     default: ''
+  base:
+    description: Commit to compare the allowlist with; no entry may be added or raised since. Empty skips the comparison.
+    default: ${{ github.event.pull_request.base.sha }}
 runs:
   using: composite
   steps:
@@ -19,5 +22,6 @@ runs:
         GLOBS: ${{ inputs.globs }}
         MAX_LINES: ${{ inputs.max-lines }}
         ALLOWLIST: ${{ inputs.allowlist }}
+        BASE: ${{ inputs.base }}
       # The globs go as one argument; the script splits it into lines.
-      run: node "$GITHUB_ACTION_PATH/file-size.mjs" --max-lines "$MAX_LINES" ${ALLOWLIST:+--allowlist "$ALLOWLIST"} "$GLOBS"
+      run: node "$GITHUB_ACTION_PATH/file-size.mjs" --max-lines "$MAX_LINES" ${ALLOWLIST:+--allowlist "$ALLOWLIST"} ${BASE:+--base "$BASE"} "$GLOBS"
