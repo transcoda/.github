@@ -10,7 +10,11 @@ language js
     `renderHook`
   },
   $program <: not contains bubble `afterEach($hook)` as $call where {
-    $hook <: contains `cleanup`,
+    // `afterEach(cleanup)`, or a callback that calls it (not one that only returns it).
+    $hook <: or {
+      `cleanup`,
+      contains `cleanup()`
+    },
     $call <: not within or {
       JsArrowFunctionExpression(),
       JsFunctionExpression(),

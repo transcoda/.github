@@ -92,3 +92,26 @@ it('the Grit rules load from the package and report', () => {
   });
   assert.deepEqual(found.sort(), ['src/time.ts plugin', 'web/a.test.tsx plugin']);
 });
+
+it('test-cleanup takes cleanup passed or called, not a callback that only returns it', () => {
+  const file = (hook) =>
+    [
+      "import { cleanup, render } from '@testing-library/react';",
+      "import { afterEach, it } from 'vitest';",
+      '',
+      hook,
+      '',
+      "it('renders', () => {",
+      '  render(null);',
+      '});',
+      '',
+    ].join('\n');
+  const found = lint({
+    'web/passed.test.tsx': file('afterEach(cleanup);'),
+    'web/called.test.tsx': file('afterEach(() => cleanup());'),
+    'web/block.test.tsx': file('afterEach(() => {\n  cleanup();\n});'),
+    'web/returned.test.tsx': file('afterEach(() => cleanup);'),
+    'web/nested.test.tsx': file("describe('x', () => {\n  afterEach(cleanup);\n});"),
+  });
+  assert.deepEqual(found.sort(), ['web/nested.test.tsx plugin', 'web/returned.test.tsx plugin']);
+});
