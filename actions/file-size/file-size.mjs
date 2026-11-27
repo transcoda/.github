@@ -145,7 +145,7 @@ export function parseRenames(output) {
 
 /** Files moved between the base commit and the working tree, as git's rename detection sees them. */
 function readRenames(base) {
-  const diff = git('diff', '--name-status', '-z', '--find-renames', '--no-ext-diff', base);
+  const diff = git('diff', '--name-status', '-z', '--find-renames', '--no-ext-diff', base, '--');
   if (diff.status !== 0) throw new Error(`Could not compare with ${base}: ${diff.stderr.trim()}`);
   return parseRenames(diff.stdout);
 }
