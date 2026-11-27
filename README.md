@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: transcoda/.github/actions/pr-title@<sha> # v1.1.0
+      - uses: transcoda/.github/actions/pr-title@<sha> # v1.1.1
 ```
 
 ### `actions/release-note`
@@ -77,14 +77,14 @@ jobs:
     timeout-minutes: 5
     steps:
       # core: notes directly in .changes/
-      - uses: transcoda/.github/actions/release-note@<sha> # v1.1.0
+      - uses: transcoda/.github/actions/release-note@<sha> # v1.1.1
         with:
           layout: flat
 ```
 
 ```yaml
       # plugins: a folder per plugin, and Renovate's pull requests need no note
-      - uses: transcoda/.github/actions/release-note@<sha> # v1.1.0
+      - uses: transcoda/.github/actions/release-note@<sha> # v1.1.1
         with:
           layout: per-folder
           folders: plugins
@@ -134,7 +134,7 @@ Set `DRY_RUN: 'true'` in the step's `env` to only print what it would do.
         with:
           pattern: nightly-*
           path: .local/artifacts
-      - uses: transcoda/.github/actions/nightly-issues@<sha> # v1.1.0
+      - uses: transcoda/.github/actions/nightly-issues@<sha> # v1.1.1
         with:
           reports: |
             .local/artifacts/nightly-unit/vitest.json
@@ -173,7 +173,7 @@ jobs:
       run: ${{ steps.changed.outputs.run }}
     steps:
       - id: changed
-        uses: transcoda/.github/actions/nightly-changed@<sha> # v1.1.0
+        uses: transcoda/.github/actions/nightly-changed@<sha> # v1.1.1
         with:
           also-watch: transcoda/transcoda # plugins only; core leaves `with` out
 
@@ -226,7 +226,7 @@ jobs:
       actions: read
       issues: write
     steps:
-      - uses: transcoda/.github/actions/main-red@<sha> # v1.1.0
+      - uses: transcoda/.github/actions/main-red@<sha> # v1.1.1
 ```
 
 ### `actions/file-size`
@@ -240,8 +240,10 @@ shows them (a final newline does not add one).
 
 On a pull request the allowlist is also compared with the one at the pull request's base commit
 (fetched if the checkout lacks it): an entry that is new there, or whose number went up, fails, so
-a file can't grow by raising its own number. When the base has no allowlist yet (the pull request
-that adds it), there is nothing to compare.
+a file can't grow by raising its own number. A file that git sees as moved since the base (its
+rename detection, on the working tree) is compared with its old path's entry, so a move that keeps
+or lowers the line count passes. When the base has no allowlist yet (the pull request that adds
+it), there is nothing to compare.
 
 | Input | Default | |
 | --- | --- | --- |
@@ -253,7 +255,7 @@ that adds it), there is nothing to compare.
 ```yaml
     steps:
       - uses: actions/checkout@<sha> # v7.0.1
-      - uses: transcoda/.github/actions/file-size@<sha> # v1.1.0
+      - uses: transcoda/.github/actions/file-size@<sha> # v1.1.1
         with:
           max-lines: 1200
           allowlist: .github/file-size-allowlist.json
@@ -313,7 +315,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: transcoda/.github/actions/screenshots@<sha> # v1.1.0
+      - uses: transcoda/.github/actions/screenshots@<sha> # v1.1.1
         with:
           paths: |
             apps/web/src/**
@@ -331,7 +333,7 @@ jobs:
 ```json
 {
   "devDependencies": {
-    "@transcoda/dev-config": "github:transcoda/.github#v1.1.0"
+    "@transcoda/dev-config": "github:transcoda/.github#v1.1.1"
   }
 }
 ```

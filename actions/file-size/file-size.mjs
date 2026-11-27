@@ -7,6 +7,7 @@
 //     <glob>... [!<glob>...]
 // With --base (a pull request's base commit), the allowlist is also compared with the one at that
 // commit: no entry may be added or raised there, so a file can't grow by raising its own number.
+// A file that git sees as moved since the base keeps its old path's entry: the move alone adds none.
 // Files are the ones git knows (tracked, plus new ones that are not ignored), from the current
 // directory, which must be the repository root. Run by action.yml, and by a repository's own
 // `pnpm check` through the @transcoda/dev-config bin.
@@ -108,9 +109,9 @@ function readAllowlist(path) {
  * The allowlist at the base commit, fetched if the checkout lacks it; null when the allowlist did
  * not exist there yet (the pull request that adds it).
  */
+const git = (...args) => spawnSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+
 function readBaseAllowlist(path, base) {
-  const git = (...args) =>
-    spawnSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (git('cat-file', '-e', `${base}^{commit}`).status !== 0) {
     git('fetch', '--no-tags', '--depth=1', 'origin', base);
     if (git('cat-file', '-e', `${base}^{commit}`).status !== 0) {
@@ -121,11 +122,48 @@ function readBaseAllowlist(path, base) {
   return shown.status === 0 ? parseAllowlist(shown.stdout, `${path} at ${base}`) : null;
 }
 
-/** Entries the allowlist adds or raises compared with the base's: both only hide growth. */
-export function baselineErrors(allowlist, base, path) {
+/**
+ * Moved files from `git diff --name-status -z --find-renames` output: new path -> old path.
+ * @param {string} output
+ * @returns {Map<string, string>}
+ */
+export function parseRenames(output) {
+  const renames = new Map();
+  const fields = output.split('\0');
+  for (let i = 0; i < fields.length; ) {
+    const status = fields[i];
+    if (!status) break;
+    if (status.startsWith('R')) {
+      renames.set(fields[i + 2], fields[i + 1]);
+      i += 3;
+    } else {
+      i += status.startsWith('C') ? 3 : 2;
+    }
+  }
+  return renames;
+}
+
+/** Files moved between the base commit and the working tree, as git's rename detection sees them. */
+function readRenames(base) {
+  const diff = git('diff', '--name-status', '-z', '--find-renames', '--no-ext-diff', base);
+  if (diff.status !== 0) throw new Error(`Could not compare with ${base}: ${diff.stderr.trim()}`);
+  return parseRenames(diff.stdout);
+}
+
+/**
+ * Entries the allowlist adds or raises compared with the base's: both only hide growth. An entry
+ * for a file moved since the base (`renames`: new path -> old path) compares with the old path's.
+ * @param {Record<string, number>} allowlist
+ * @param {Record<string, number>} base
+ * @param {string} path
+ * @param {Map<string, string>} [renames]
+ */
+export function baselineErrors(allowlist, base, path, renames = new Map()) {
   const errors = [];
   for (const [file, lines] of Object.entries(allowlist)) {
-    const before = base[file];
+    const from = base[file] === undefined ? renames.get(file) : undefined;
+    const before = from === undefined ? base[file] : base[from];
+    const name = from !== undefined && before !== undefined ? `${file} (moved from ${from})` : file;
     if (before === undefined) {
       errors.push({
         file: path,
@@ -134,7 +172,7 @@ export function baselineErrors(allowlist, base, path) {
     } else if (lines > before) {
       errors.push({
         file: path,
-        message: `${path} raises ${file} from ${before} to ${lines} lines; the numbers may only go down. Move code out of it instead.`,
+        message: `${path} raises ${name} from ${before} to ${lines} lines; the numbers may only go down. Move code out of it instead.`,
       });
     }
   }
@@ -146,12 +184,14 @@ export function run(argv, env = process.env, out = console.log, err = console.er
   let args;
   let allowlist;
   let base = null;
+  let renames = new Map();
   let matches;
   try {
     args = parseArgs(argv);
     matches = matcher(args.globs);
     allowlist = readAllowlist(args.allowlist);
     if (args.base && args.allowlist) base = readBaseAllowlist(args.allowlist, args.base);
+    if (base) renames = readRenames(args.base);
   } catch (error) {
     err(error.message);
     return 2;
@@ -166,7 +206,7 @@ export function run(argv, env = process.env, out = console.log, err = console.er
   const sizes = new Map(files.map((f) => [f, countLines(readFileSync(f, 'utf8'))]));
   const listName = args.allowlist || 'the allowlist';
   const errors = [
-    ...(base ? baselineErrors(allowlist, base, listName) : []),
+    ...(base ? baselineErrors(allowlist, base, listName, renames) : []),
     ...sizeErrors(sizes, allowlist, args.max, listName),
   ];
   for (const e of errors) {
