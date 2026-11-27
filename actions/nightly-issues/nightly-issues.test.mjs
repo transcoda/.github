@@ -51,10 +51,13 @@ const playwright = {
 describe('readReports', () => {
   it('reads each report by its shape, in any number (the plugins nightly has only vitest)', () => {
     assert.deepEqual(readReports([vitest], '/repo'), {
-      results: [{ id: 'plugins/a/src/a.test.ts > works', passed: true, error: '' }],
+      results: [
+        { id: 'plugins/a/src/a.test.ts > works', passed: true, error: '' },
+        { id: 'plugins/a/src/a.test.ts (the file)', passed: true, error: '' },
+      ],
       missing: false,
     });
-    assert.equal(readReports([vitest, playwright], '/repo').results.length, 2);
+    assert.equal(readReports([vitest, playwright], '/repo').results.length, 3);
   });
 
   it('a missing or unknown report marks the run failed', () => {
@@ -100,8 +103,62 @@ describe('parseVitest', () => {
     assert.deepEqual(results, [
       { id: 'apps/web/src/a.test.ts > A > works', passed: true, error: '' },
       { id: 'apps/web/src/a.test.ts > A breaks', passed: false, error: 'AssertionError: no' },
+      // It loaded: its tests ran.
+      { id: 'apps/web/src/a.test.ts (the file)', passed: true, error: '' },
       { id: 'apps/server/src/b.test.ts (the file)', passed: false, error: 'Cannot find module x' },
     ]);
+  });
+
+  it('a file whose tests run again closes its "(the file)" issue; one that never ran does not', () => {
+    const results = parseVitest(
+      {
+        testResults: [
+          {
+            name: '/repo/b.test.ts',
+            status: 'passed',
+            assertionResults: [{ fullName: 'b works', title: 'works', status: 'passed' }],
+          },
+          {
+            name: '/repo/c.test.ts',
+            status: 'skipped',
+            assertionResults: [{ fullName: 'c', status: 'skipped' }],
+          },
+        ],
+      },
+      '/repo',
+    );
+    const open = [
+      { number: 1, id: 'b.test.ts (the file)' },
+      { number: 2, id: 'c.test.ts (the file)' },
+    ];
+    assert.deepEqual(
+      plan(results, open, ctx).map((a) => [a.kind, a.number]),
+      [['close', 1]],
+    );
+  });
+
+  it('makes ids that come back out of the issue marker unchanged', () => {
+    const [arrow, broken] = parseVitest(
+      {
+        testResults: [
+          {
+            name: '/repo/a.test.ts',
+            status: 'failed',
+            assertionResults: [
+              { fullName: 'x', title: 'maps a --> b', status: 'failed', failureMessages: [] },
+              { fullName: 'y', title: 'two\nlines', status: 'failed', failureMessages: [] },
+            ],
+          },
+        ],
+      },
+      '/repo',
+    );
+    assert.equal(arrow.id, 'a.test.ts > maps a -- > b');
+    assert.equal(broken.id, 'a.test.ts > two lines');
+    for (const { id } of [arrow, broken]) {
+      const [create] = plan([fail(id)], [], ctx);
+      assert.equal(idOf(create.body, KIND), id);
+    }
   });
 });
 

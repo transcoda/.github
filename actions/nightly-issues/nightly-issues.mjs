@@ -37,6 +37,12 @@ const MAX_ERROR = 3000;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI colour codes start with ESC.
 const stripAnsi = (s) => s.replace(/\u001b\[[0-9;]*m/g, '');
 
+/**
+ * A test id as it goes into the issue marker and comes back out of it: one line, and no `-->`,
+ * which would end the marker's HTML comment early.
+ */
+export const cleanId = (id) => id.replace(/\s+/g, ' ').replaceAll('-->', '-- >');
+
 const clip = (s) =>
   s.length > MAX_ERROR ? `${s.slice(0, MAX_ERROR)}\n… (cut; the full output is in the run)` : s;
 
@@ -49,15 +55,24 @@ export function parseVitest(report, root) {
     for (const t of file.assertionResults) {
       if (t.status !== 'passed' && t.status !== 'failed') continue;
       out.push({
-        id: [path, ...(t.title ? [...(t.ancestorTitles ?? []), t.title] : [t.fullName])].join(
-          ' > ',
+        id: cleanId(
+          [path, ...(t.title ? [...(t.ancestorTitles ?? []), t.title] : [t.fullName])].join(' > '),
         ),
         passed: t.status === 'passed',
         error: stripAnsi((t.failureMessages ?? []).join('\n')),
       });
     }
+    // A file that failed without a failing test did not load (or a hook broke): one failing "test".
+    // A file whose tests ran loaded, which closes that issue once it is fixed.
+    const ran = file.assertionResults.some((t) => t.status === 'passed' || t.status === 'failed');
     if (file.status === 'failed' && !file.assertionResults.some((t) => t.status === 'failed')) {
-      out.push({ id: `${path} (the file)`, passed: false, error: stripAnsi(file.message ?? '') });
+      out.push({
+        id: cleanId(`${path} (the file)`),
+        passed: false,
+        error: stripAnsi(file.message ?? ''),
+      });
+    } else if (ran) {
+      out.push({ id: cleanId(`${path} (the file)`), passed: true, error: '' });
     }
   }
   return out;
@@ -74,7 +89,7 @@ export function parsePlaywright(report) {
         const path = [...titles, spec.title].join(' > ');
         const last = t.results.at(-1)?.error?.message ?? '';
         out.push({
-          id: `e2e/${spec.file} > [${t.projectName}] > ${path}`,
+          id: cleanId(`e2e/${spec.file} > [${t.projectName}] > ${path}`),
           passed: t.status !== 'unexpected',
           error: stripAnsi(last),
         });
@@ -205,7 +220,9 @@ export async function main(env = process.env, fetchImpl = globalThis.fetch, log 
     runUrl: env.RUN_URL ?? '',
     sha: env.SHA ?? '',
   });
-  log(`${results.length} tests, ${results.filter((r) => !r.passed).length} failing`);
+  // A loaded file's pass is not a test of its own.
+  const tests = results.filter((r) => !(r.passed && r.id.endsWith(' (the file)')));
+  log(`${tests.length} tests, ${tests.filter((r) => !r.passed).length} failing`);
   if (env.DRY_RUN === 'true') {
     for (const line of describe(actions)) log(line);
     return;
